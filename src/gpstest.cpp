@@ -76,11 +76,18 @@ void loop()
     DEBUG_PORT.print(fix.longitude(), 6);
     DEBUG_PORT.println();
 
+    display.setTextSize(1);
     display.setCursor(0, 0);
     display.print("lat:");
     display.println(fix.latitude(), 8);
     display.print("lon:");
     display.println(fix.longitude(), 8);
+    display.print("alt:");
+    display.println(fix.altitude(), 8);
+    display.setTextSize(2);
+    display.print(fix.speed_mph(), 2);
+    display.println(" MPH");
+
     display.display();
     display.clearDisplay();
   }
