@@ -19,6 +19,11 @@
 #define gpsPort GPS_Serial(1)
 #define GPS_PORT_NAME "GPS_Serial 1"
 
+#define LED_BUILTIN 23
+
+float lastLat;
+float lastLon;
+
 NMEAGPS gps;
 gps_fix fix;
 
@@ -28,6 +33,7 @@ HardwareSerial GPS_Serial(1); // use UART #1
 
 void setup()
 {
+  pinMode(LED_BUILTIN, OUTPUT);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
@@ -69,12 +75,13 @@ void loop()
     DEBUG_PORT.print(',');
     DEBUG_PORT.print(fix.longitude(), 6);
     DEBUG_PORT.println();
+
+    display.setCursor(0, 0);
+    display.print("lat:");
+    display.println(fix.latitude(), 8);
+    display.print("lon:");
+    display.println(fix.longitude(), 8);
+    display.display();
+    display.clearDisplay();
   }
-  display.setCursor(0, 0);
-  display.print("lat:");
-  display.println(fix.latitude());
-  display.print("lon:");
-  display.println(fix.longitude());
-  display.display();
-  display.clearDisplay();
 }
