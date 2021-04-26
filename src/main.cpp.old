@@ -1,9 +1,18 @@
 //Working SDCard IO
-
+//pin 23 is the built in led
 #include <Arduino.h>
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
+
+
+
+
+
+
+
+
+
 
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
 {
@@ -259,6 +268,7 @@ void setup()
 
 void loop()
 {
+
 }
 
 
