@@ -4,14 +4,6 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
-#include "SSD1306.h"
-#include "oled_display.h"
-
-//Define Some pins
-#define OLED_ADDR 0x3C
-#define OLED_SDA 4
-#define OLED_SCL 15
-
 
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
 {
@@ -215,7 +207,6 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println("Starting GPS_DATA_LOGGER");
-
   pinMode(15, INPUT_PULLUP);
   SPI.begin(14,02,15,13);
   if (!SD.begin(5)) {
@@ -269,3 +260,5 @@ void setup()
 void loop()
 {
 }
+
+
