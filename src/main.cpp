@@ -24,11 +24,95 @@
 //Only needed if your board is irreragluler like mine >.<
 #define LED_BUILTIN 23
 
+//-6 for central time zone
+#define timeZoneTimeCorrection 6
+
 NMEAGPS gps;
 gps_fix fix;
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 HardwareSerial GPS_Serial(1); // use UART #1
+
+// Set these values to the offset of your timezone from GMT
+
+static const int32_t zone_hours = -timeZoneTimeCorrection; // EST was -6L
+static const int32_t zone_minutes = 0L;                    // usually zero
+static const NeoGPS::clock_t zone_offset =
+    zone_hours * NeoGPS::SECONDS_PER_HOUR +
+    zone_minutes * NeoGPS::SECONDS_PER_MINUTE;
+
+// Uncomment one DST changeover rule, or define your own:
+#define USA_DST
+//#define EU_DST
+
+#if defined(USA_DST)
+static const uint8_t springMonth = 3;
+static const uint8_t springDate = 14; // latest 2nd Sunday
+static const uint8_t springHour = 2;
+static const uint8_t fallMonth = 11;
+static const uint8_t fallDate = 7; // latest 1st Sunday
+static const uint8_t fallHour = 2;
+#define CALCULATE_DST
+
+#elif defined(EU_DST)
+static const uint8_t springMonth = 3;
+static const uint8_t springDate = 31; // latest last Sunday
+static const uint8_t springHour = 1;
+static const uint8_t fallMonth = 10;
+static const uint8_t fallDate = 31; // latest last Sunday
+static const uint8_t fallHour = 1;
+#define CALCULATE_DST
+#endif
+
+
+
+void adjustTime(NeoGPS::time_t &dt)
+{
+  NeoGPS::clock_t seconds = dt; // convert date/time structure to seconds
+
+#ifdef CALCULATE_DST
+      //  Calculate DST changeover times once per reset and year!
+  static NeoGPS::time_t changeover;
+  static NeoGPS::clock_t springForward, fallBack;
+
+  if ((springForward == 0) || (changeover.year != dt.year))
+  {
+
+    //  Calculate the spring changeover time (seconds)
+    changeover.year = dt.year;
+    changeover.month = springMonth;
+    changeover.date = springDate;
+    changeover.hours = springHour;
+    changeover.minutes = 0;
+    changeover.seconds = 0;
+    changeover.set_day();
+    // Step back to a Sunday, if day != SUNDAY
+    changeover.date -= (changeover.day - NeoGPS::time_t::SUNDAY);
+    springForward = (NeoGPS::clock_t)changeover;
+
+    //  Calculate the fall changeover time (seconds)
+    changeover.month = fallMonth;
+    changeover.date = fallDate;
+    changeover.hours = fallHour - 1; // to account for the "apparent" DST +1
+    changeover.set_day();
+    // Step back to a Sunday, if day != SUNDAY
+    changeover.date -= (changeover.day - NeoGPS::time_t::SUNDAY);
+    fallBack = (NeoGPS::clock_t)changeover;
+  }
+#endif
+
+  //  First, offset from UTC to the local timezone
+  seconds += zone_offset;
+
+#ifdef CALCULATE_DST
+  //  Then add an hour if DST is in effect
+  if ((springForward <= seconds) && (seconds < fallBack))
+    seconds += NeoGPS::SECONDS_PER_HOUR;
+#endif
+
+  dt = seconds; // convert seconds back to a date/time structure
+
+} 
 
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
 {
@@ -262,7 +346,7 @@ void setup()
   DEBUG_PORT.println("Starting GPS_DATA_LOGGER");
 
   pinMode(15, INPUT_PULLUP);
-  SPI.begin(14,02,15,13);
+  SPI.begin(14, 02, 15, 13);
   if (!SD.begin(5))
   {
     DEBUG_PORT.println("Card Mount Failed!");
@@ -325,32 +409,57 @@ void setup()
   // testFileIO(SD, "/test.txt");
 }
 
+//How offen to update the display
+#define displayUpdateTime 500
+
+//var to store the last time the display was updated in ms
+int lastDisplayUpdate;
+
 void gpsLoop()
 {
+  int currentTime = millis();
+
   while (gps.available(GPS_Serial))
   {
     fix = gps.read();
+
+    if (fix.valid.time && fix.valid.date)
+    {
+      adjustTime(fix.dateTime);
+    }
   }
+  //here goes the code to run if we moved
 
   if (fix.valid.location)
   {
-    DEBUG_PORT.print(fix.latitude(), 6);
-    DEBUG_PORT.print(',');
-    DEBUG_PORT.print(fix.longitude(), 6);
-    DEBUG_PORT.println();
-    display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.print("lat:");
-    display.println(fix.latitude(), 8);
-    display.print("lon:");
-    display.println(fix.longitude(), 8);
-    display.print("alt:");
-    display.println(fix.altitude(), 8);
-    display.setTextSize(2);
-    display.print(fix.speed_mph(), 2);
-    display.println(" MPH");
-    display.display();
-    display.clearDisplay();
+    if (currentTime - lastDisplayUpdate >= displayUpdateTime)
+    {
+      DEBUG_PORT.println(currentTime - lastDisplayUpdate);
+      DEBUG_PORT.print(fix.latitude(), 6);
+      DEBUG_PORT.print(',');
+      DEBUG_PORT.print(fix.longitude(), 6);
+      DEBUG_PORT.println();
+      display.setTextSize(1);
+      display.setCursor(0, 0);
+      display.print("lat:");
+      display.println(fix.latitude(), 8);
+      display.print("lon:");
+      display.println(fix.longitude(), 8);
+      display.print("alt:");
+      display.println(fix.altitude(), 8);
+      display.setTextSize(2);
+      display.print(fix.speed_mph(), 2);
+      display.println(" MPH");
+      display.setTextSize(1);
+      display.print(fix.dateTime.hours);
+      display.print(":");
+      display.print(fix.dateTime.minutes);
+      display.print(":");
+      display.print(fix.dateTime.seconds);
+      display.display();
+      display.clearDisplay();
+      lastDisplayUpdate = currentTime;
+    }
   }
 }
 
