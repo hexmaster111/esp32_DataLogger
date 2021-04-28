@@ -27,6 +27,12 @@
 //-6 for central time zone
 #define timeZoneTimeCorrection 6
 
+//How offen to update the display
+#define displayUpdateTime 500
+
+//var to store the last time the display was updated in ms
+int lastDisplayUpdate;
+
 NMEAGPS gps;
 gps_fix fix;
 
@@ -63,8 +69,6 @@ static const uint8_t fallDate = 31; // latest last Sunday
 static const uint8_t fallHour = 1;
 #define CALCULATE_DST
 #endif
-
-
 
 void adjustTime(NeoGPS::time_t &dt)
 {
@@ -111,8 +115,7 @@ void adjustTime(NeoGPS::time_t &dt)
 #endif
 
   dt = seconds; // convert seconds back to a date/time structure
-
-} 
+}
 
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
 {
@@ -409,11 +412,29 @@ void setup()
   // testFileIO(SD, "/test.txt");
 }
 
-//How offen to update the display
-#define displayUpdateTime 500
+bool isAM(int currentHoure)
+{
+  if (currentHoure > 12)
+  {
+    return false;
+  }
+  else
+  {
+    return true;
+  }
+}
 
-//var to store the last time the display was updated in ms
-int lastDisplayUpdate;
+int convert24HourTo12(int currentHoure)
+{
+  if (currentHoure < 12)
+  {
+    return currentHoure;
+  }
+  else
+  {
+    return currentHoure - 12;
+  }
+}
 
 void gpsLoop()
 {
@@ -451,11 +472,21 @@ void gpsLoop()
       display.print(fix.speed_mph(), 2);
       display.println(" MPH");
       display.setTextSize(1);
-      display.print(fix.dateTime.hours);
+      display.print(convert24HourTo12(fix.dateTime.hours));
       display.print(":");
       display.print(fix.dateTime.minutes);
       display.print(":");
       display.print(fix.dateTime.seconds);
+
+      if (isAM(fix.dateTime.hours))
+      {
+        display.print(" AM");
+      }
+      else
+      {
+        display.print(" PM");
+      }
+
       display.display();
       display.clearDisplay();
       lastDisplayUpdate = currentTime;
