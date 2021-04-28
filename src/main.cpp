@@ -480,21 +480,32 @@ void gpsLoop()
 
       if (isAM(fix.dateTime.hours))
       {
-        display.print(" AM");
+        display.println(" AM");
       }
       else
       {
-        display.print(" PM");
+        display.println(" PM");
       }
 
+      display.print(fix.dateTime.month);
+      display.print("/");
+      display.print(fix.dateTime.date);
+      display.print("/");
+      display.print(fix.dateTime.year);
+
       display.display();
-      display.clearDisplay();
+      display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
       lastDisplayUpdate = currentTime;
     }
   }
 }
 
+void displayLoop()
+{
+}
+
 void loop()
 {
   gpsLoop();
+  displayLoop();
 }
