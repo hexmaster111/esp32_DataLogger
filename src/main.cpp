@@ -438,8 +438,6 @@ int convert24HourTo12(int currentHoure)
 
 void gpsLoop()
 {
-  int currentTime = millis();
-
   while (gps.available(GPS_Serial))
   {
     fix = gps.read();
@@ -450,7 +448,10 @@ void gpsLoop()
     }
   }
   //here goes the code to run if we moved
+}
 
+void displayLoop(int currentTime)
+{
   if (fix.valid.location)
   {
     if (currentTime - lastDisplayUpdate >= displayUpdateTime)
@@ -500,12 +501,10 @@ void gpsLoop()
   }
 }
 
-void displayLoop()
-{
-}
-
 void loop()
 {
+  int currentTime = millis();
+
   gpsLoop();
-  displayLoop();
+  displayLoop(currentTime);
 }
