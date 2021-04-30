@@ -52,6 +52,9 @@ bool sdIn;
 //Just a switch for the indicator on the display
 bool dataSaving;
 
+//For determing if we need to write sd data or not
+float lastSavedLat, lastSavedLon, lastSavedAlt;
+
 NMEAGPS gps;
 gps_fix fix;
 
@@ -529,8 +532,9 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       }
       else
       {
-        display.print("NO SD");
+        display.print("NO SD NOT LOGGING");
       }
+
       display.display();
       display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
       lastDisplayUpdate = currentTime;
@@ -538,27 +542,10 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
   }
 }
 
-/*
-  Sdcard saving ideas
-  session file no
-  if !sessionFile.txt
-
-  if location new
-    Write location to sdcard
-    Write Speed to sdcard
-    save old location in vars 
-
-*/
-
-//For determing if we need to write sd data or not
-float lastSavedLat, lastSavedLon, lastSavedAlt;
-
 void saveLocation(int sessionNumber)
 {
   if ((fix.latitude() != lastSavedLat) || (fix.longitude() != lastSavedLon) || (fix.altitude() != lastSavedAlt))
   {
-    //Saving the New location data
-    //DEBUG_PORT.println("NEW DATA!!");
     //DataFormat
     // month, day, year, hr, min, sec, LAT, LON, ALT, SPEED,
 
@@ -584,14 +571,15 @@ void saveLocation(int sessionNumber)
         String(fix.speed_mph(), 2) +
         String(",") + '\n';
 
-    // DEBUG_PORT.print(OutputString);
     DEBUG_PORT.println();
+
     if (sdIn)
     {
       //appendFile(SD, "/test.txt", OutputString);
     }
 
     dataSaving = !dataSaving;
+
     lastSavedLat = fix.latitude();
     lastSavedLon = fix.longitude();
     lastSavedAlt = fix.altitude();
@@ -601,6 +589,7 @@ void saveLocation(int sessionNumber)
 void loop()
 {
   int currentTime = millis();
+
   gpsLoop();
   displayLoop(currentTime, sessionNumber);
   saveLocation(sessionNumber);
