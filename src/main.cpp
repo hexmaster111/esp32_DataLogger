@@ -43,8 +43,14 @@ NOTES:
 //var to store the last time the display was updated in ms
 int lastDisplayUpdate;
 
+//var used to store the session number of the logs
+int sessionNumber;
+
 //so we can know if there is or is not an sdcard :wink:
 bool sdIn;
+
+//Just a switch for the indicator on the display
+bool dataSaving;
 
 NMEAGPS gps;
 gps_fix fix;
@@ -441,11 +447,13 @@ void setup()
   // deleteFile(SD, "/foo.txt");
   // renameFile(SD, "/hello.txt", "/foo.txt");
   // readFile(SD, "/foo.txt");
+
+  writeFile(SD, "/test.txt", "--FileStart--");
 }
 
 bool isAM(int currentHoure)
 {
-  if (currentHoure > 12)
+  if (currentHoure >= 12)
   {
     return false;
   }
@@ -457,7 +465,7 @@ bool isAM(int currentHoure)
 
 int convert24HourTo12(int currentHoure)
 {
-  if (currentHoure < 12)
+  if (currentHoure < 13)
   {
     return currentHoure;
   }
@@ -478,7 +486,6 @@ void gpsLoop()
       adjustTime(fix.dateTime);
     }
   }
-  //here goes the code to run if we moved
 }
 
 void displayLoop(int currentTime)
@@ -523,6 +530,10 @@ void displayLoop(int currentTime)
       if (sdIn)
       {
         display.print("SD OK");
+        if (dataSaving)
+        {
+          display.print(" ... ");
+        }
       }
       else
       {
@@ -536,10 +547,64 @@ void displayLoop(int currentTime)
   }
 }
 
-// void writePosToSD(String file) //file given in "/filename.txt"
-// {
-//   appendFile(SD ,file, "Dummie location");
-// }
+/*
+  Sdcard saving ideas
+  session file no
+  if !sessionFile.txt
+
+  if location new
+    Write location to sdcard
+    Write Speed to sdcard
+    save old location in vars 
+
+*/
+
+//For determing if we need to write sd data or not
+float lastSavedLat, lastSavedLon, lastSavedAlt;
+
+void saveLocation(int sessionNumber)
+{
+  if ((fix.latitude() != lastSavedLat) || (fix.longitude() != lastSavedLon) || (fix.altitude() != lastSavedAlt))
+  {
+    //Saving the New location data
+    //DEBUG_PORT.println("NEW DATA!!");
+    //format for data should be kinda like this
+    // TIME,LAT,LON,ALT,SPEED,
+    // Time format
+    // month, day, year, hr, min,sec
+
+    String OutputString =
+        String(fix.dateTime.month) +
+        String(",") +
+        String(fix.dateTime.date) +
+        String(",") +
+        String(fix.dateTime.year) +
+        String(",") +
+        String(fix.dateTime.hours) +
+        String(",") +
+        String(fix.dateTime.minutes) +
+        String(",") +
+        String(fix.dateTime.seconds) +
+        String(",") +
+        String(fix.latitude(), 8) +
+        String(",") +
+        String(fix.longitude(), 8) +
+        String(",") +
+        String(fix.altitude(), 8) +
+        String(",") +
+        String(fix.speed_mph(), 2) +
+        String(",") + '\n';
+
+    DEBUG_PORT.print(OutputString);
+
+    //appendFile(SD, "/test.txt", "World!\n");
+
+    dataSaving = !dataSaving;
+    lastSavedLat = fix.latitude();
+    lastSavedLon = fix.longitude();
+    lastSavedAlt = fix.altitude();
+  }
+}
 
 void loop()
 {
@@ -547,9 +612,5 @@ void loop()
 
   gpsLoop();
   displayLoop(currentTime);
-
-  if (fix.valid.location)
-  {
-    // writePosToSD();
-  }
+  saveLocation(0); //this number will need to incriment one every time we run for the file name
 }
