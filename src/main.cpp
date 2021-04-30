@@ -1,4 +1,8 @@
-//Working SDCard IO
+/*
+GPS Dataloger by Hailey Gruszynski
+For imbeded systems 2021
+*/
+
 #include <NMEAGPS.h>
 #include <Arduino.h>
 #include "FS.h"
@@ -8,6 +12,8 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+
+#define VERSION_NUMBER 0.1 //just so i can know on the display 
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -19,7 +25,7 @@
 #define GPSport_h
 #define DEBUG_PORT Serial
 
-#define gpsPort GPS_Serial(1)
+#define gpsPort GPS_Serial //was GPS_Serial(1)
 #define GPS_PORT_NAME "GPS_Serial 1"
 //Only needed if your board is irreragluler like mine >.<
 #define LED_BUILTIN 23
@@ -338,9 +344,11 @@ void setup()
   display.setTextSize(1);
   display.println(F("Final Project 2021"));
   display.println(F("Imbeded Systems"));
+  display.print("v");
+  display.print(VERSION_NUMBER);
   display.display();
 
-  delay(100);
+  delay(1000);
 
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -350,7 +358,8 @@ void setup()
 
   pinMode(15, INPUT_PULLUP);
   SPI.begin(14, 02, 15, 13);
-  if (!SD.begin(5))
+
+  if (!SD.begin(5)) 
   {
     DEBUG_PORT.println("Card Mount Failed!");
     display.clearDisplay();
@@ -397,19 +406,19 @@ void setup()
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   DEBUG_PORT.printf("SD Card Size: %lluMB\n", cardSize);
 
-  // listDir(SD, "/", 0);
-  // createDir(SD, "/mydir");
-  // listDir(SD, "/", 0);
-  // removeDir(SD, "/mydir");
-  // listDir(SD, "/", 2);
-  // writeFile(SD, "/hello.txt", "Hello ");
-  // appendFile(SD, "/hello.txt", "World!\n");
-  // readFile(SD, "/hello.txt");
-  // deleteFile(SD, "/foo.txt");
-  // renameFile(SD, "/hello.txt", "/foo.txt");
-  // readFile(SD, "/foo.txt");
-  // DEBUG_PORT.println("Testing SDCard...");
-  // testFileIO(SD, "/test.txt");
+  listDir(SD, "/", 0); //leaving this here so i know what things do
+  createDir(SD, "/mydir");
+  listDir(SD, "/", 0);
+  removeDir(SD, "/mydir");
+  listDir(SD, "/", 2);
+  writeFile(SD, "/hello.txt", "Hello ");
+  appendFile(SD, "/hello.txt", "World!\n");
+  readFile(SD, "/hello.txt");
+  deleteFile(SD, "/foo.txt");
+  renameFile(SD, "/hello.txt", "/foo.txt");
+  readFile(SD, "/foo.txt");
+  DEBUG_PORT.println("Testing SDCard...");
+  testFileIO(SD, "/test.txt");
 }
 
 bool isAM(int currentHoure)
@@ -456,11 +465,6 @@ void displayLoop(int currentTime)
   {
     if (currentTime - lastDisplayUpdate >= displayUpdateTime)
     {
-      DEBUG_PORT.println(currentTime - lastDisplayUpdate);
-      DEBUG_PORT.print(fix.latitude(), 6);
-      DEBUG_PORT.print(',');
-      DEBUG_PORT.print(fix.longitude(), 6);
-      DEBUG_PORT.println();
       display.setTextSize(1);
       display.setCursor(0, 0);
       display.print("lat:");
@@ -501,10 +505,21 @@ void displayLoop(int currentTime)
   }
 }
 
+// void writePosToSD(String file) //file given in "/filename.txt"
+// {
+//   appendFile(SD ,file, "Dummie location");
+// }
+
+
 void loop()
 {
   int currentTime = millis();
 
   gpsLoop();
   displayLoop(currentTime);
+
+  if (fix.valid.location)
+  {
+    // writePosToSD();
+  }
 }
