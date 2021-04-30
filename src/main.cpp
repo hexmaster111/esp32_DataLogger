@@ -245,9 +245,10 @@ void writeFile(fs::FS &fs, String path, const char *message)
   }
 }
 
-void appendFile(fs::FS &fs, const char *path, String message)
+void appendFile(fs::FS &fs, String path, String message)
 {
-  DEBUG_PORT.printf("Appending to file: %s\n", path);
+  DEBUG_PORT.print("Appending to file:");
+  DEBUG_PORT.println(path);
 
   File file = fs.open(path, FILE_APPEND);
   if (!file)
@@ -544,7 +545,7 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
   }
 }
 
-void saveLocation(int sessionNumber)
+void saveLocation(String path)
 {
   if ((fix.latitude() != lastSavedLat) || (fix.longitude() != lastSavedLon) || (fix.altitude() != lastSavedAlt))
   {
@@ -575,7 +576,7 @@ void saveLocation(int sessionNumber)
 
     if (sdIn)
     {
-      // appendFile(SD, "/test.txt", OutputString);
+      appendFile(SD, path, OutputString);
     }
 
     dataSaving = !dataSaving;
@@ -592,5 +593,5 @@ void loop()
 
   gpsLoop();
   displayLoop(currentTime, sessionNumber);
-  saveLocation(sessionNumber);
+  saveLocation(logFilePath);
 }
