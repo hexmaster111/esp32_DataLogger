@@ -44,7 +44,7 @@ NOTES:
 int lastDisplayUpdate;
 
 //var used to store the session number of the logs
-int sessionNumber;
+int sessionNumber = random(1000000);
 
 //so we can know if there is or is not an sdcard :wink:
 bool sdIn;
@@ -239,7 +239,7 @@ void writeFile(fs::FS &fs, const char *path, const char *message)
   }
 }
 
-void appendFile(fs::FS &fs, const char *path, const char *message)
+void appendFile(fs::FS &fs, const char *path, String message)
 {
   DEBUG_PORT.printf("Appending to file: %s\n", path);
 
@@ -488,29 +488,22 @@ void gpsLoop()
   }
 }
 
-void displayLoop(int currentTime)
+void displayLoop(int currentTime, int sessionNumberForLogs)
 {
   if (fix.valid.location)
   {
     if (currentTime - lastDisplayUpdate >= displayUpdateTime)
     {
-      display.setTextSize(1);
       display.setCursor(0, 0);
-      display.print("lat:");
-      display.println(fix.latitude(), 8);
-      display.print("lon:");
-      display.println(fix.longitude(), 8);
-      display.print("alt:");
-      display.println(fix.altitude(), 8);
       display.setTextSize(2);
       display.print(fix.speed_mph(), 2);
       display.println(" MPH");
-      display.setTextSize(1);
-      display.print(convert24HourTo12(fix.dateTime.hours));
-      display.print(":");
-      display.print(fix.dateTime.minutes);
-      display.print(":");
-      display.print(fix.dateTime.seconds);
+
+      display.print(String(convert24HourTo12(fix.dateTime.hours)) +
+                    String(":") +
+                    String(fix.dateTime.minutes) +
+                    String(":") +
+                    String(fix.dateTime.seconds));
 
       if (isAM(fix.dateTime.hours))
       {
@@ -520,12 +513,11 @@ void displayLoop(int currentTime)
       {
         display.println(" PM");
       }
-
-      display.print(fix.dateTime.month);
-      display.print("/");
-      display.print(fix.dateTime.date);
-      display.print("/");
-      display.println(fix.dateTime.year);
+      display.setTextSize(1);
+      //print the date in mm/dd/yy
+      display.println(String(fix.dateTime.month + String("/") + fix.dateTime.date + String("/") + fix.dateTime.year));
+      //display the session number
+      display.println(String("Session ") + String(sessionNumberForLogs));
 
       if (sdIn)
       {
@@ -539,7 +531,6 @@ void displayLoop(int currentTime)
       {
         display.print("NO SD");
       }
-
       display.display();
       display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
       lastDisplayUpdate = currentTime;
@@ -568,10 +559,8 @@ void saveLocation(int sessionNumber)
   {
     //Saving the New location data
     //DEBUG_PORT.println("NEW DATA!!");
-    //format for data should be kinda like this
-    // TIME,LAT,LON,ALT,SPEED,
-    // Time format
-    // month, day, year, hr, min,sec
+    //DataFormat
+    // month, day, year, hr, min, sec, LAT, LON, ALT, SPEED,
 
     String OutputString =
         String(fix.dateTime.month) +
@@ -595,9 +584,12 @@ void saveLocation(int sessionNumber)
         String(fix.speed_mph(), 2) +
         String(",") + '\n';
 
-    DEBUG_PORT.print(OutputString);
-
-    //appendFile(SD, "/test.txt", "World!\n");
+    // DEBUG_PORT.print(OutputString);
+    DEBUG_PORT.println();
+    if (sdIn)
+    {
+      //appendFile(SD, "/test.txt", OutputString);
+    }
 
     dataSaving = !dataSaving;
     lastSavedLat = fix.latitude();
@@ -609,8 +601,7 @@ void saveLocation(int sessionNumber)
 void loop()
 {
   int currentTime = millis();
-
   gpsLoop();
-  displayLoop(currentTime);
-  saveLocation(0); //this number will need to incriment one every time we run for the file name
+  displayLoop(currentTime, sessionNumber);
+  saveLocation(sessionNumber);
 }
