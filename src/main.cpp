@@ -5,6 +5,8 @@ For imbeded systems 2021
 NOTES:
   Remove the SDCARD before uploading the sketch or else upload 
   may fail 
+@TODO
+  Blink an led to indicate writing
 */
 
 #include <NMEAGPS.h>
@@ -39,6 +41,13 @@ NOTES:
 
 //How offen to update the display
 #define displayUpdateTime 500
+//Pin for eject
+#define SD_EJECT_PIN 4
+//read the IO every how offten (in ms)
+#define IO_PULLING_TIME 1000
+
+//var to store last io read
+unsigned long lastIOReadTime;
 
 //var to store the last time the display was updated in ms
 int lastDisplayUpdate;
@@ -47,6 +56,9 @@ int lastDisplayUpdate;
 int sessionNumber = random(1000000);
 // Our path for the log to be written to
 String logFilePath = String("/") + String(sessionNumber) + String(".txt");
+
+//IO Name
+bool sd_eject;
 
 //so we can know if there is or is not an sdcard :wink:
 bool sdIn;
@@ -367,7 +379,8 @@ void displayInit()
 void setup()
 {
 
-  // pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(SD_EJECT_PIN, INPUT);
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
@@ -496,9 +509,10 @@ void gpsLoop()
 
 void displayLoop(int currentTime, int sessionNumberForLogs)
 {
-  if (fix.valid.location)
+  if (currentTime - lastDisplayUpdate >= displayUpdateTime)
   {
-    if (currentTime - lastDisplayUpdate >= displayUpdateTime)
+
+    if (fix.valid.location)
     {
       display.setCursor(0, 0);
       display.setTextSize(2);
@@ -527,7 +541,7 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
 
       if (sdIn)
       {
-        display.print("SD OK");
+        display.print("LOGGING");
         if (dataSaving)
         {
           display.print(" ... ");
@@ -541,6 +555,14 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       display.display();
       display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
       lastDisplayUpdate = currentTime;
+    }
+    else
+    {
+      display.setCursor(0, 0);
+      display.setTextSize(2);
+      display.println("SEARCHING FOR GPS...");
+      display.display();
+      display.clearDisplay();
     }
   }
 }
@@ -587,11 +609,77 @@ void saveLocation(String path)
   }
 }
 
+void sdEjectScreen(int countDownTime)
+{
+  display.setCursor(0, 0);
+  display.setTextSize(2);
+  display.println("SD EJECTED");
+  if (countDownTime != -1)
+  {
+    display.print("Rebooting in: ");
+    display.println(countDownTime);
+  }
+  display.display();
+  display.clearDisplay();
+}
+
+int rebootTimer;
+//Time to wait before rebooting after an eject
+#define REBOOT_DELAY_EJECT 20000
+
+void ejectLoop()
+{
+  while (sd_eject)
+  {
+    sdEjectScreen(-1);
+    if (!digitalRead(SD_EJECT_PIN))
+    {
+      rebootTimer = millis(); // when the reboot button was released
+      //rebootTimer
+      while (true)
+      {
+        //if button released
+        //count up to reboot_delay_eject then reboot
+
+        sdEjectScreen(map(millis() - rebootTimer, 0, REBOOT_DELAY_EJECT, 20, 0));
+
+        if (millis() - rebootTimer > REBOOT_DELAY_EJECT)
+        {
+          ESP.restart();
+        }
+      }
+    }
+  }
+}
+
+void readIOPerotic(int currentTime)
+{
+  if (currentTime - lastIOReadTime > IO_PULLING_TIME)
+  {
+    sd_eject = digitalRead(SD_EJECT_PIN);
+
+    lastIOReadTime = currentTime;
+  }
+
+  if (sd_eject)
+  {
+    ejectLoop();
+  }
+}
+
 void loop()
 {
-  int currentTime = millis();
+  //unsigned long loopTimer = micros(); //un comment to time the loop
 
+  unsigned long currentTime = millis();
+
+  readIOPerotic(currentTime);
   gpsLoop();
   displayLoop(currentTime, sessionNumber);
-  saveLocation(logFilePath);
+
+  if (fix.valid.location & !sd_eject)
+  {
+    saveLocation(logFilePath);
+  }
 }
+//DEBUG_PORT.println(String("LoopTime: ") + String(micros() - loopTimer)); //for checking loop time
