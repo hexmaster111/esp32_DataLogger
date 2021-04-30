@@ -6,7 +6,6 @@ NOTES:
   Remove the SDCARD before uploading the sketch or else upload 
   may fail 
 @TODO
-  Blink an led to indicate writing
 */
 
 #include <NMEAGPS.h>
@@ -257,6 +256,8 @@ void writeFile(fs::FS &fs, String path, const char *message)
   }
 }
 
+bool blink = true;
+
 void appendFile(fs::FS &fs, String path, String message)
 {
   DEBUG_PORT.print("Appending to file:");
@@ -271,6 +272,8 @@ void appendFile(fs::FS &fs, String path, String message)
   if (file.print(message))
   {
     DEBUG_PORT.println("Message appended");
+    digitalWrite(LED_BUILTIN, blink);
+    blink = !blink;
   }
   else
   {
@@ -535,7 +538,9 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       }
       display.setTextSize(1);
       //print the date in mm/dd/yy
-      display.println(String(fix.dateTime.month + String("/") + fix.dateTime.date + String("/") + fix.dateTime.year));
+      display.println(String(fix.dateTime.month +
+                             String("/") + fix.dateTime.date +
+                             String("/") + fix.dateTime.year));
       //display the session number
       display.println(String("Session ") + String(sessionNumberForLogs));
 
@@ -572,7 +577,7 @@ void saveLocation(String path)
   if ((fix.latitude() != lastSavedLat) || (fix.longitude() != lastSavedLon) || (fix.altitude() != lastSavedAlt))
   {
     //DataFormat
-    // month, day, year, hr, min, sec, LAT, LON, ALT, SPEED,
+    // month, day, year, hr, min, sec, LAT, LON, ALT, SPEED,\n
 
     String OutputString =
         String(fix.dateTime.month) +
