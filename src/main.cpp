@@ -45,6 +45,8 @@ int lastDisplayUpdate;
 
 //var used to store the session number of the logs
 int sessionNumber = random(1000000);
+// Our path for the log to be written to
+String logFilePath = String("/") + String(sessionNumber) + String(".txt");
 
 //so we can know if there is or is not an sdcard :wink:
 bool sdIn;
@@ -222,9 +224,10 @@ void readFile(fs::FS &fs, const char *path)
   }
 }
 
-void writeFile(fs::FS &fs, const char *path, const char *message)
+void writeFile(fs::FS &fs, String path, const char *message)
 {
-  DEBUG_PORT.printf("Writing file: %s\n", path);
+  DEBUG_PORT.print("Writing file: ");
+  DEBUG_PORT.println(String(path));
 
   File file = fs.open(path, FILE_WRITE);
   if (!file)
@@ -410,7 +413,6 @@ void setup()
     display.display();
     display.clearDisplay();
     delay(1000);
-    return;
   }
 
   DEBUG_PORT.print("SD Card Type: ");
@@ -437,6 +439,8 @@ void setup()
   {
     sdIn = true;
     DEBUG_PORT.println("SDCARD IN");
+    DEBUG_PORT.println(logFilePath);
+    writeFile(SD, logFilePath, "--FileStart--");
   }
 
   // listDir(SD, "/", 0); //leaving this here so i know what things do
@@ -450,8 +454,6 @@ void setup()
   // deleteFile(SD, "/foo.txt");
   // renameFile(SD, "/hello.txt", "/foo.txt");
   // readFile(SD, "/foo.txt");
-
-  writeFile(SD, "/test.txt", "--FileStart--");
 }
 
 bool isAM(int currentHoure)
@@ -571,11 +573,9 @@ void saveLocation(int sessionNumber)
         String(fix.speed_mph(), 2) +
         String(",") + '\n';
 
-    DEBUG_PORT.println();
-
     if (sdIn)
     {
-      //appendFile(SD, "/test.txt", OutputString);
+      // appendFile(SD, "/test.txt", OutputString);
     }
 
     dataSaving = !dataSaving;
