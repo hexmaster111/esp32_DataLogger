@@ -1,6 +1,10 @@
 /*
 GPS Dataloger by Hailey Gruszynski
 For imbeded systems 2021
+
+NOTES:
+  Remove the SDCARD before uploading the sketch or else upload 
+  may fail 
 */
 
 #include <NMEAGPS.h>
@@ -13,7 +17,7 @@ For imbeded systems 2021
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define VERSION_NUMBER 0.1 //just so i can know on the display 
+#define VERSION_NUMBER 0.2 //just so i can know on the display
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -38,6 +42,9 @@ For imbeded systems 2021
 
 //var to store the last time the display was updated in ms
 int lastDisplayUpdate;
+
+//so we can know if there is or is not an sdcard :wink:
+bool sdIn;
 
 NMEAGPS gps;
 gps_fix fix;
@@ -321,18 +328,8 @@ void testFileIO(fs::FS &fs, const char *path)
   file.close();
 }
 
-void setup()
+void displayInit()
 {
-
-  pinMode(LED_BUILTIN, OUTPUT);
-
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
-  {
-    DEBUG_PORT.println(F("SSD1306 allocation failed"));
-    for (;;)
-      ; // Don't proceed, loop forever
-  }
-
   display.setRotation(2);
   display.display();
   display.clearDisplay();
@@ -352,14 +349,34 @@ void setup()
 
   display.clearDisplay();
   display.setCursor(0, 0);
+}
+
+void setup()
+{
+
+  // pinMode(LED_BUILTIN, OUTPUT);
+
+  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
+  {
+    DEBUG_PORT.println(F("SSD1306 allocation failed"));
+    for (;;)
+      ; // Don't proceed, loop forever
+  }
+
+  displayInit();
 
   DEBUG_PORT.begin(115200);
   DEBUG_PORT.println("Starting GPS_DATA_LOGGER");
 
-  pinMode(15, INPUT_PULLUP);
-  SPI.begin(14, 02, 15, 13);
+  GPS_Serial.begin(9600, SERIAL_8N1, GPIO_NUM_34, GPIO_NUM_35);
 
-  if (!SD.begin(5)) 
+  // pinMode(15, INPUT_PULLUP); //Uncomment if you have issues getting SPI to work
+
+  SPI.begin(14, 02, 15, 13); //Used to redefine the default SPI pins
+                             //Change this to whatever your SPI pins are
+                             //remove the numbers here to use default vals
+
+  if (!SD.begin(5))
   {
     DEBUG_PORT.println("Card Mount Failed!");
     display.clearDisplay();
@@ -367,20 +384,22 @@ void setup()
     display.setTextSize(2);
     display.println("SDCARD MOUNT FAIL");
     display.display();
+    display.clearDisplay();
     delay(1000);
   }
-  GPS_Serial.begin(9600, SERIAL_8N1, GPIO_NUM_12, GPIO_NUM_15);
 
   uint8_t cardType = SD.cardType();
 
   if (cardType == CARD_NONE)
   {
+    sdIn = false;
+    DEBUG_PORT.println("SDCARD OUT");
     DEBUG_PORT.println("No SD card attached");
-    display.clearDisplay();
     display.setCursor(0, 0);
     display.setTextSize(2);
     display.println("NO SDCARD ATTACHED");
     display.display();
+    display.clearDisplay();
     delay(1000);
     return;
   }
@@ -405,20 +424,23 @@ void setup()
 
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   DEBUG_PORT.printf("SD Card Size: %lluMB\n", cardSize);
+  if (cardSize)
+  {
+    sdIn = true;
+    DEBUG_PORT.println("SDCARD IN");
+  }
 
-  listDir(SD, "/", 0); //leaving this here so i know what things do
-  createDir(SD, "/mydir");
-  listDir(SD, "/", 0);
-  removeDir(SD, "/mydir");
-  listDir(SD, "/", 2);
-  writeFile(SD, "/hello.txt", "Hello ");
-  appendFile(SD, "/hello.txt", "World!\n");
-  readFile(SD, "/hello.txt");
-  deleteFile(SD, "/foo.txt");
-  renameFile(SD, "/hello.txt", "/foo.txt");
-  readFile(SD, "/foo.txt");
-  DEBUG_PORT.println("Testing SDCard...");
-  testFileIO(SD, "/test.txt");
+  // listDir(SD, "/", 0); //leaving this here so i know what things do
+  // createDir(SD, "/mydir");
+  // listDir(SD, "/", 0);
+  // removeDir(SD, "/mydir");
+  // listDir(SD, "/", 2);
+  // writeFile(SD, "/hello.txt", "Hello ");
+  // appendFile(SD, "/hello.txt", "World!\n");
+  // readFile(SD, "/hello.txt");
+  // deleteFile(SD, "/foo.txt");
+  // renameFile(SD, "/hello.txt", "/foo.txt");
+  // readFile(SD, "/foo.txt");
 }
 
 bool isAM(int currentHoure)
@@ -496,7 +518,16 @@ void displayLoop(int currentTime)
       display.print("/");
       display.print(fix.dateTime.date);
       display.print("/");
-      display.print(fix.dateTime.year);
+      display.println(fix.dateTime.year);
+
+      if (sdIn)
+      {
+        display.print("SD OK");
+      }
+      else
+      {
+        display.print("NO SD");
+      }
 
       display.display();
       display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
@@ -509,7 +540,6 @@ void displayLoop(int currentTime)
 // {
 //   appendFile(SD ,file, "Dummie location");
 // }
-
 
 void loop()
 {
