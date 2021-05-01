@@ -457,7 +457,7 @@ void setup()
     sdIn = true;
     DEBUG_PORT.println("SDCARD IN");
     DEBUG_PORT.println(logFilePath);
-    writeFile(SD, logFilePath, "--FileStart--");
+    writeFile(SD, logFilePath, "month,day,year,houre,minute,sec,lat,long,alt,speed(mph)\n");
   }
 
   // listDir(SD, "/", 0); //leaving this here so i know what things do
