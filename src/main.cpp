@@ -6,6 +6,10 @@ NOTES:
   Remove the SDCARD before uploading the sketch or else upload 
   may fail 
 @TODO
+  Change the logging peramiters to only log if speed is more then x mph
+  Add some compiler options to not compile the debug stuff (i forgot what its called)
+
+  Add delay to eject loop (added a at todo)
 */
 
 #include <NMEAGPS.h>
@@ -18,7 +22,7 @@ NOTES:
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#define VERSION_NUMBER 0.2 //just so i can know on the display
+#define VERSION_NUMBER 1.0 //just so i can know on the display
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -32,6 +36,7 @@ NOTES:
 
 #define gpsPort GPS_Serial //was GPS_Serial(1)
 #define GPS_PORT_NAME "GPS_Serial 1"
+
 //Only needed if your board is irreragluler like mine >.<
 #define LED_BUILTIN 23
 
@@ -40,10 +45,20 @@ NOTES:
 
 //How offen to update the display
 #define displayUpdateTime 500
+
 //Pin for eject
 #define SD_EJECT_PIN 4
-//read the IO every how offten (in ms)
+
+//read the IO every how offten (in ms) only used for the eject button rn
 #define IO_PULLING_TIME 1000
+
+//Time to wait before rebooting after an eject (IN MS)
+#define REBOOT_DELAY_EJECT 20000
+//Time to wait in sec of the REBOOT_DELAY_EJECT
+#define REBOOT_DELAY_DISPLAY_TIME 20
+
+//Var to store the reboot timer, only used in ejection loop
+int rebootTimer;
 
 //var to store last io read
 unsigned long lastIOReadTime;
@@ -53,8 +68,9 @@ int lastDisplayUpdate;
 
 //var used to store the session number of the logs
 int sessionNumber = random(1000000);
+
 // Our path for the log to be written to
-String logFilePath = String("/") + String(sessionNumber) + String(".txt");
+String logFilePath = String("/") + String(sessionNumber) + String(".csv");
 
 //IO Name
 bool sd_eject;
@@ -62,10 +78,11 @@ bool sd_eject;
 //so we can know if there is or is not an sdcard :wink:
 bool sdIn;
 
-//Just a switch for the indicator on the display
+//This switches state every data save
 bool dataSaving;
 
 //For determing if we need to write sd data or not
+//likely not needed, should be replaced with just a min speed for logging
 float lastSavedLat, lastSavedLon, lastSavedAlt;
 
 NMEAGPS gps;
@@ -105,7 +122,7 @@ static const uint8_t fallHour = 1;
 #define CALCULATE_DST
 #endif
 
-void adjustTime(NeoGPS::time_t &dt)
+void adjustTime(NeoGPS::time_t &dt) //We only use this for the display (24 hr time hard)
 {
   NeoGPS::clock_t seconds = dt; // convert date/time structure to seconds
 
@@ -152,7 +169,7 @@ void adjustTime(NeoGPS::time_t &dt)
   dt = seconds; // convert seconds back to a date/time structure
 }
 
-void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
+void listDir(fs::FS &fs, const char *dirname, uint8_t levels) //unused currently
 {
   DEBUG_PORT.printf("Listing directory: %s\n", dirname);
 
@@ -191,7 +208,7 @@ void listDir(fs::FS &fs, const char *dirname, uint8_t levels)
   }
 }
 
-void createDir(fs::FS &fs, const char *path)
+void createDir(fs::FS &fs, const char *path) //unused currently
 {
   DEBUG_PORT.printf("Creating Dir: %s\n", path);
   if (fs.mkdir(path))
@@ -204,7 +221,7 @@ void createDir(fs::FS &fs, const char *path)
   }
 }
 
-void removeDir(fs::FS &fs, const char *path)
+void removeDir(fs::FS &fs, const char *path) //unused currently
 {
   DEBUG_PORT.printf("Removing Dir: %s\n", path);
   if (fs.rmdir(path))
@@ -217,7 +234,7 @@ void removeDir(fs::FS &fs, const char *path)
   }
 }
 
-void readFile(fs::FS &fs, const char *path)
+void readFile(fs::FS &fs, const char *path) //unused currently
 {
   DEBUG_PORT.printf("Reading file: %s\n", path);
 
@@ -235,7 +252,7 @@ void readFile(fs::FS &fs, const char *path)
   }
 }
 
-void writeFile(fs::FS &fs, String path, const char *message)
+void writeFile(fs::FS &fs, String path, const char *message) //used for the inital file write
 {
   DEBUG_PORT.print("Writing file: ");
   DEBUG_PORT.println(String(path));
@@ -258,7 +275,7 @@ void writeFile(fs::FS &fs, String path, const char *message)
 
 bool blink = true;
 
-void appendFile(fs::FS &fs, String path, String message)
+void appendFile(fs::FS &fs, String path, String message) //appends data to our file
 {
   DEBUG_PORT.print("Appending to file:");
   DEBUG_PORT.println(path);
@@ -281,7 +298,7 @@ void appendFile(fs::FS &fs, String path, String message)
   }
 }
 
-void renameFile(fs::FS &fs, const char *path1, const char *path2)
+void renameFile(fs::FS &fs, const char *path1, const char *path2) //unused currently
 {
   DEBUG_PORT.printf("Renaming file %s to %s\n", path1, path2);
   if (fs.rename(path1, path2))
@@ -294,7 +311,7 @@ void renameFile(fs::FS &fs, const char *path1, const char *path2)
   }
 }
 
-void deleteFile(fs::FS &fs, const char *path)
+void deleteFile(fs::FS &fs, const char *path) //unused currently
 {
   DEBUG_PORT.printf("Deleting file: %s\n", path);
   if (fs.remove(path))
@@ -307,7 +324,7 @@ void deleteFile(fs::FS &fs, const char *path)
   }
 }
 
-void testFileIO(fs::FS &fs, const char *path)
+void testFileIO(fs::FS &fs, const char *path) //unused currently
 {
   File file = fs.open(path);
   static uint8_t buf[512];
@@ -356,6 +373,11 @@ void testFileIO(fs::FS &fs, const char *path)
   file.close();
 }
 
+/*
+  This function sets up the display and displays
+  the startup screen
+*/
+
 void displayInit()
 {
   display.setRotation(2);
@@ -373,7 +395,7 @@ void displayInit()
   display.print(VERSION_NUMBER);
   display.display();
 
-  delay(1000);
+  delay(3000); //time to show the splash screen
 
   display.clearDisplay();
   display.setCursor(0, 0);
@@ -382,8 +404,8 @@ void displayInit()
 void setup()
 {
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(SD_EJECT_PIN, INPUT);
+  pinMode(LED_BUILTIN, OUTPUT); //Used to indicate writing
+  pinMode(SD_EJECT_PIN, INPUT); //used to tell the program to be done with the sdcard
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
@@ -392,12 +414,12 @@ void setup()
       ; // Don't proceed, loop forever
   }
 
-  displayInit();
+  displayInit(); //Start display and show beginning message
 
-  DEBUG_PORT.begin(115200);
+  DEBUG_PORT.begin(115200); //Start the serial monitor
   DEBUG_PORT.println("Starting GPS_DATA_LOGGER");
 
-  GPS_Serial.begin(9600, SERIAL_8N1, GPIO_NUM_34, GPIO_NUM_35);
+  GPS_Serial.begin(9600, SERIAL_8N1, GPIO_NUM_34, GPIO_NUM_35); //Start the GPS serial
 
   // pinMode(15, INPUT_PULLUP); //Uncomment if you have issues getting SPI to work
 
@@ -405,7 +427,7 @@ void setup()
                              //Change this to whatever your SPI pins are
                              //remove the numbers here to use default vals
 
-  if (!SD.begin(5))
+  if (!SD.begin(5)) //if the sdcard fails to mount
   {
     DEBUG_PORT.println("Card Mount Failed!");
     display.clearDisplay();
@@ -419,7 +441,7 @@ void setup()
 
   uint8_t cardType = SD.cardType();
 
-  if (cardType == CARD_NONE)
+  if (cardType == CARD_NONE) //if there is no sdcard installed
   {
     sdIn = false;
     DEBUG_PORT.println("SDCARD OUT");
@@ -432,7 +454,7 @@ void setup()
     delay(1000);
   }
 
-  DEBUG_PORT.print("SD Card Type: ");
+  DEBUG_PORT.print("SD Card Type: "); //just for debugging the sdcard
   if (cardType == CARD_MMC)
   {
     DEBUG_PORT.println("MMC");
@@ -452,6 +474,7 @@ void setup()
 
   uint64_t cardSize = SD.cardSize() / (1024 * 1024);
   DEBUG_PORT.printf("SD Card Size: %lluMB\n", cardSize);
+  //Here is where we write the CSV headder line and make our file
   if (cardSize)
   {
     sdIn = true;
@@ -459,20 +482,9 @@ void setup()
     DEBUG_PORT.println(logFilePath);
     writeFile(SD, logFilePath, "month,day,year,houre,minute,sec,lat,long,alt,speed(mph)\n");
   }
-
-  // listDir(SD, "/", 0); //leaving this here so i know what things do
-  // createDir(SD, "/mydir");
-  // listDir(SD, "/", 0);
-  // removeDir(SD, "/mydir");
-  // listDir(SD, "/", 2);
-  // writeFile(SD, "/hello.txt", "Hello ");
-  // appendFile(SD, "/hello.txt", "World!\n");
-  // readFile(SD, "/hello.txt");
-  // deleteFile(SD, "/foo.txt");
-  // renameFile(SD, "/hello.txt", "/foo.txt");
-  // readFile(SD, "/foo.txt");
 }
 
+//Used to show the AM/PM Indicator on the display
 bool isAM(int currentHoure)
 {
   if (currentHoure >= 12)
@@ -485,6 +497,7 @@ bool isAM(int currentHoure)
   }
 }
 
+//Used to convert 24 hr to 12 hr lol, had to ask?
 int convert24HourTo12(int currentHoure)
 {
   if (currentHoure < 13)
@@ -497,6 +510,8 @@ int convert24HourTo12(int currentHoure)
   }
 }
 
+//where we acutaly get our GPS data and convert it into nice data
+// Thank you NEOGPS <3 you da best
 void gpsLoop()
 {
   while (gps.available(GPS_Serial))
@@ -510,18 +525,23 @@ void gpsLoop()
   }
 }
 
+//Where we take our data and display it
+//Current time used for display update stuff
+//sessionNumber is just so we can know what log number to find
+//that drive on
 void displayLoop(int currentTime, int sessionNumberForLogs)
 {
-  if (currentTime - lastDisplayUpdate >= displayUpdateTime)
+  if (currentTime - lastDisplayUpdate >= displayUpdateTime) //if its time to update display
   {
 
-    if (fix.valid.location)
+    if (fix.valid.location) //and if we have a good location
     {
       display.setCursor(0, 0);
       display.setTextSize(2);
       display.print(fix.speed_mph(), 2);
       display.println(" MPH");
 
+      //Display the time on one line with AM/PM indication
       display.print(String(convert24HourTo12(fix.dateTime.hours)) +
                     String(":") +
                     String(fix.dateTime.minutes) +
@@ -537,13 +557,14 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
         display.println(" PM");
       }
       display.setTextSize(1);
+
       //print the date in mm/dd/yy
       display.println(String(fix.dateTime.month +
                              String("/") + fix.dateTime.date +
                              String("/") + fix.dateTime.year));
       //display the session number
       display.println(String("Session ") + String(sessionNumberForLogs));
-
+      //Logging indicator with blinking lights!!
       if (sdIn)
       {
         display.print("LOGGING");
@@ -561,6 +582,7 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
       lastDisplayUpdate = currentTime;
     }
+    //If we dont have a GPS Fix display ...
     else
     {
       display.setCursor(0, 0);
@@ -571,7 +593,9 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
     }
   }
 }
-
+//Where the magic happends babyyyyyy
+//not really... We just throw it all in a big old string and write that baby right to
+//the sdcard and hope it works :P
 void saveLocation(String path)
 {
   if ((fix.latitude() != lastSavedLat) || (fix.longitude() != lastSavedLon) || (fix.altitude() != lastSavedAlt))
@@ -603,10 +627,10 @@ void saveLocation(String path)
 
     if (sdIn)
     {
+      //only if the sdcard is in do we try to write to it
       appendFile(SD, path, OutputString);
+      dataSaving = !dataSaving;
     }
-
-    dataSaving = !dataSaving;
 
     lastSavedLat = fix.latitude();
     lastSavedLon = fix.longitude();
@@ -614,6 +638,7 @@ void saveLocation(String path)
   }
 }
 
+//Display stuff for the Ejection loop
 void sdEjectScreen(int countDownTime)
 {
   display.setCursor(0, 0);
@@ -628,26 +653,23 @@ void sdEjectScreen(int countDownTime)
   display.clearDisplay();
 }
 
-int rebootTimer;
-//Time to wait before rebooting after an eject
-#define REBOOT_DELAY_EJECT 20000
-
+//ONLY CALL THIS FUNCTION IF ITS TIME TO BE DONE
+//This function will intontonly lock up the mcu
+//and then call a reboot
 void ejectLoop()
 {
-  while (sd_eject)
+  while (sd_eject) //while the eject switch held/pressed
   {
-    sdEjectScreen(-1);
+    sdEjectScreen(-1); //show just SDEjected
     if (!digitalRead(SD_EJECT_PIN))
     {
       rebootTimer = millis(); // when the reboot button was released
-      //rebootTimer
       while (true)
       {
+        //@TODO - Add a delay so the screen dont glitch out all the time
         //if button released
         //count up to reboot_delay_eject then reboot
-
-        sdEjectScreen(map(millis() - rebootTimer, 0, REBOOT_DELAY_EJECT, 20, 0));
-
+        sdEjectScreen(map(millis() - rebootTimer, 0, REBOOT_DELAY_EJECT, REBOOT_DELAY_DISPLAY_TIME, 0));
         if (millis() - rebootTimer > REBOOT_DELAY_EJECT)
         {
           ESP.restart();
@@ -657,12 +679,15 @@ void ejectLoop()
   }
 }
 
+//Used to help speed up the program by not reading the buttons every loop through
+//we just have to check a bool then and not do a digitalRead
 void readIOPerotic(int currentTime)
 {
   if (currentTime - lastIOReadTime > IO_PULLING_TIME)
   {
     sd_eject = digitalRead(SD_EJECT_PIN);
-
+    // mark = digitalRead(MARK_PIN);
+    // add more buttons here if they do need to be added
     lastIOReadTime = currentTime;
   }
 
@@ -672,17 +697,19 @@ void readIOPerotic(int currentTime)
   }
 }
 
+//Where the program dose the busness
 void loop()
 {
   //unsigned long loopTimer = micros(); //un comment to time the loop
 
-  unsigned long currentTime = millis();
+  unsigned long currentTime = millis(); //get the current time
 
-  readIOPerotic(currentTime);
-  gpsLoop();
-  displayLoop(currentTime, sessionNumber);
+  readIOPerotic(currentTime);              //check the io if we need
+  gpsLoop();                               //Check if the gps is saying anything funny
+  displayLoop(currentTime, sessionNumber); //run the display
 
-  if (fix.valid.location & !sd_eject)
+  if (fix.valid.location & !sd_eject) //if we have a valid location and we are not ejecting
+                                      //the sdcard
   {
     saveLocation(logFilePath);
   }
