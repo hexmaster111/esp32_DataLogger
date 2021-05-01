@@ -1,3 +1,4 @@
+[![forthebadge](https://forthebadge.com/images/badges/contains-tasty-spaghetti-code.svg)](https://forthebadge.com)
 Program by Hailey Gruszynski for Imbeded Systems 2021
 
 This is programed for an ESP32 Dev board by TTGO labled the TTGO 1.6 this should work on an uno or other board.
