@@ -62,7 +62,10 @@ NOTES:
 #define REBOOT_DELAY_EJECT 20000
 //Time to wait in sec of the REBOOT_DELAY_EJECT
 #define REBOOT_DELAY_DISPLAY_TIME 20
-
+//Internal Pin for the bat voltage
+#define VBAT_PIN 35
+//Var used to store battery voltage
+float vBatt;
 //Var to store the reboot timer, only used in ejection loop
 int rebootTimer;
 
@@ -270,6 +273,7 @@ void setup()
 
   pinMode(LED_BUILTIN, OUTPUT); //Used to indicate writing
   pinMode(SD_EJECT_PIN, INPUT); //used to tell the program to be done with the sdcard
+  pinMode(VBAT_PIN, INPUT);     //Used for the battery voltage pin
 
   if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS))
   {
@@ -400,7 +404,7 @@ void gpsLoop()
 //Current time used for display update stuff
 //sessionNumber is just so we can know what log number to find
 //that drive on
-void displayLoop(int currentTime, int sessionNumberForLogs)
+void displayLoop(int currentTime, int sessionNumberForLogs,float battery_voltage)
 {
   if (currentTime - lastDisplayUpdate >= displayUpdateTime) //if its time to update display
   {
@@ -411,6 +415,7 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       display.setTextSize(2);
       display.print(fix.speed_mph(), 2);
       display.println(" MPH");
+      display.setTextSize(1);
 
       //Display the time on one line with AM/PM indication
       display.print(String(convert24HourTo12(fix.dateTime.hours)) +
@@ -427,7 +432,6 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       {
         display.println(" PM");
       }
-      display.setTextSize(1);
 
       //print the date in mm/dd/yy
       display.println(String(fix.dateTime.month +
@@ -448,6 +452,10 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       {
         display.print("NO SD NOT LOGGING");
       }
+      display.setCursor(0,50);
+      display.print("Bat:");
+      //display.print(map(battery_voltage, 3.2,4.2,0,100));
+      display.print(battery_voltage);
 
       display.display();
       display.clearDisplay(); //do this after so that if i have a status bar it wont clear first
@@ -459,6 +467,9 @@ void displayLoop(int currentTime, int sessionNumberForLogs)
       display.setCursor(0, 0);
       display.setTextSize(2);
       display.println("SEARCHING FOR GPS...");
+      display.setCursor(0,50);
+      display.print("Bat:");
+      display.print(battery_voltage);
       display.display();
       display.clearDisplay();
     }
@@ -556,12 +567,23 @@ void readIOPerotic(int currentTime)
 {
   if (currentTime - lastIOReadTime > IO_PULLING_TIME)
   {
+    vBatt = (float)(analogRead(VBAT_PIN)) / 4095 * 2 * 3.3 * 1.1;
+    /*
+  The ADC value is a 12-bit number, so the maximum value is 4095 (counting from 0).
+  To convert the ADC integer value to a real voltage you’ll need to divide it by the maximum value of 4095,
+  then double it (note above that Adafruit halves the voltage), then multiply that by the reference voltage of the ESP32 which 
+  is 3.3V and then vinally, multiply that again by the ADC Reference Voltage of 1100mV.
+*/
+
     sd_eject = digitalRead(SD_EJECT_PIN);
-    // mark = digitalRead(MARK_PIN);
-    // add more buttons here if they do need to be added
+
+#ifdef DEBUG
+    DEBUG_PORT.print("Vbat = ");
+    DEBUG_PORT.print(vBatt);
+    DEBUG_PORT.println(" Volts");
+#endif
     lastIOReadTime = currentTime;
   }
-
   if (sd_eject)
   {
     ejectLoop();
@@ -577,7 +599,7 @@ void loop()
 
   readIOPerotic(currentTime);              //check the io if we need
   gpsLoop();                               //Check if the gps is saying anything funny
-  displayLoop(currentTime, sessionNumber); //run the display
+  displayLoop(currentTime, sessionNumber, vBatt); //run the display
 
   if (fix.valid.location & !sd_eject) //if we have a valid location and we are not ejecting
                                       //the sdcard
